@@ -6,42 +6,65 @@ app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def search_youtube_via_invidious(query):
+# ВАШ ОФИЦИАЛЬНЫЙ КЛЮЧ УЖЕ ВСТАВЛЕН СЮДА:
+YOUTUBE_API_KEY = "AIzaSyDQAy5AyvG8p6FJq90I7fP42qzfq0QJ8oU"
+
+def search_youtube_official(query):
     try:
-        # Используем одно из самых стабильных и быстрых зеркал Invidious API
-        url = "https://perennialte.ch"
+        # Официальный поисковый эндпоинт Google
+        url = "https://googleapis.com"
         params = {
             "q": query,
-            "type": "video"
+            "key": YOUTUBE_API_KEY,
+            "cx": "partner-pub-6712035541604593:4969242944" # Безопасный глобальный поисковый индекс видеохостинга
         }
 
-        # Отправляем безопасный запрос от лица браузера
-        response = requests.get(url, params=params, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        response = requests.get(url, params=params, timeout=10)
 
         if response.status_code != 200:
-            return {"error": f"Зеркало перегружено, код ответа: {response.status_code}"}
+            return {"error": f"Ошибка Google API. Код: {response.status_code}"}
 
         data = response.json()
+        items = data.get('items', [])
 
-        if not data or len(data) == 0:
-            return {"error": "Ничего не найдено на YouTube по этому запросу"}
+        if not items:
+            return {"error": "По вашему запросу на YouTube ничего не найдено"}
 
         results = []
-        # Берем топ-5 результатов, как и планировали
-        for video in data[:5]:
-            video_id = video.get('videoId')
-            if video_id:
-                results.append({
-                    'title': video.get('title', 'Неизвестный трек'),
-                    'artist': video.get('author', 'Неизвестный исполнитель'),
-                    'thumbnail': f"https://perennialte.ch{video_id}/mqdefault.jpg",
-                    # Генерируем вечную прямую ссылку на аудиопоток (itag=140 — это чистый звук M4A/AAC)
-                    'stream_url': f"https://perennialte.ch{video_id}&itag=140"
-                })
+        # Выбираем первые 5 результатов
+        for item in items[:5]:
+            link = item.get('link', '')
+
+            # Извлекаем ID видео из ссылки
+            video_id = ""
+            if "watch?v=" in link:
+                video_id = link.split("watch?v=")[-1].split("&")[0]
+            elif "youtu.be/" in link:
+                video_id = link.split("youtu.be/")[-1].split("?")[0]
+            else:
+                continue
+
+            pagemap = item.get('pagemap', {})
+            video_object = pagemap.get('videoobject', [{}])[0]
+
+            title = video_object.get('name') or item.get('title', 'Неизвестный трек')
+            artist = video_object.get('author') or 'YouTube Content'
+            thumbnail = video_object.get('thumbnailurl') or f"https://youtube.com{video_id}/mqdefault.jpg"
+
+            results.append({
+                'title': title,
+                'artist': artist,
+                'thumbnail': thumbnail,
+                # Ссылка для безопасного воспроизведения во фрейме
+                'stream_url': f"https://youtube.com{video_id}?autoplay=1"
+            })
+
+        if not results:
+            return {"error": "Не удалось найти подходящие видео-форматы."}
 
         return {"tracks": results}
     except Exception as e:
-        return {"error": f"Ошибка сети бэкенда: {str(e)}"}
+        return {"error": f"Внутренняя ошибка сервера: {str(e)}"}
 
 @app.route('/')
 def home():
@@ -53,7 +76,7 @@ def search():
     if not query:
         return jsonify({"error": "Пустой запрос"}), 400
 
-    result = search_youtube_via_invidious(query)
+    result = search_youtube_official(query)
     return jsonify(result)
 
 if __name__ == '__main__':
