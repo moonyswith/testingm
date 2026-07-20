@@ -97,19 +97,22 @@
 function playTrack(index) {
     const track = foundTracks[index];
 
-    // Скрываем статичную обложку, так как видео-плеер сам покажет превью
-    document.getElementById('main-cover').style.display = 'none';
+    // Показываем обложку трека высокого качества
+    const cover = document.getElementById('main-cover');
+    cover.src = track.thumbnail;
+    cover.style.display = 'block';
 
-    // Находим главный блок плеера и делаем его видимым
+    document.getElementById('track-title').innerText = track.title;
+    document.getElementById('track-artist').innerText = track.artist;
+
     const playerBox = document.getElementById('player-box');
     playerBox.style.display = 'block';
 
-    // Встраиваем официальный плеер YouTube вместо старого тега <audio>
-    playerBox.innerHTML = `
-        <iframe width="100%" height="250" src="${track.stream_url}" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-        <h3 id="track-title">${track.title}</h3>
-        <p id="track-artist">${track.artist}</p>
-    `;
+    // Передаем прямую MP3 ссылку в стандартный тег аудио
+    const player = document.getElementById('audio-player');
+    player.src = track.stream_url;
+    player.load();
+    player.play().catch(e => console.log("Нажмите Play вручную"));
 }
 
 </script>

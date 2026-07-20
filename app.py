@@ -6,46 +6,43 @@ app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Ваш проверенный рабочий ключ Google API
-YOUTUBE_API_KEY = "AIzaSyDQAy5AyvG8p6FJq90I7fP42qzfq0QJ8oU"
-
-def search_youtube_direct(query):
+def search_itunes_music(query):
     try:
-        # Прямой официальный эндпоинт поиска самого YouTube
-        url = "https://googleapis.com"
+        # Официальный открытый эндпоинт Apple iTunes (не требует ключей и авторизаций)
+        url = "https://apple.com"
         params = {
-            "part": "snippet",
-            "q": query,
-            "maxResults": 5,
-            "type": "video",
-            "key": YOUTUBE_API_KEY
+            "term": query,
+            "media": "music",
+            "limit": 5,
+            "lang": "ru_ru"
         }
 
         response = requests.get(url, params=params, timeout=10)
 
         if response.status_code != 200:
-            return {"error": f"Ошибка YouTube API. Код: {response.status_code}. Проверьте, включен ли YouTube Data API v3 в консоли Google."}
+            return {"error": "Музыкальная база временно недоступна"}
 
         data = response.json()
-        items = data.get('items', [])
+        results = data.get('results', [])
 
-        if not items:
-            return {"error": "По вашему запросу ничего не найдено на YouTube"}
+        if not results:
+            return {"error": "По вашему запросу ничего не найдено"}
 
-        results = []
-        for item in items:
-            video_id = item.get('id', {}).get('videoId')
-            snippet = item.get('snippet', {})
+        tracks = []
+        for item in results:
+            # Делаем обложку более качественной (из 100х100 в 300х300)
+            artwork = item.get('artworkUrl100', 'https://placeholder.com')
+            artwork_high = artwork.replace('100x100bb', '300x300bb')
 
-            if video_id:
-                results.append({
-                    'title': snippet.get('title', 'Неизвестный трек'),
-                    'artist': snippet.get('channelTitle', 'YouTube Content'),
-                    'thumbnail': snippet.get('thumbnails', {}).get('medium', {}).get('url', ''),
-                    'stream_url': f"https://youtube.com{video_id}?autoplay=1"
-                })
+            tracks.append({
+                'title': item.get('trackName', 'Неизвестный трек'),
+                'artist': item.get('artistName', 'Неизвестный исполнитель'),
+                'thumbnail': artwork_high,
+                # Прямая вечная MP3-ссылка на 30-секундный оригинальный превью-поток
+                'stream_url': item.get('previewUrl', '')
+            })
 
-        return {"tracks": results}
+        return {"tracks": tracks}
     except Exception as e:
         return {"error": f"Внутренняя ошибка сервера: {str(e)}"}
 
@@ -59,7 +56,7 @@ def search():
     if not query:
         return jsonify({"error": "Пустой запрос"}), 400
 
-    result = search_youtube_direct(query)
+    result = search_itunes_music(query)
     return jsonify(result)
 
 if __name__ == '__main__':
