@@ -1,4 +1,4 @@
-import os
+
 import requests
 from flask import Flask, send_from_directory, request, jsonify
 
