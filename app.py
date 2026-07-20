@@ -6,61 +6,44 @@ app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ВАШ ОФИЦИАЛЬНЫЙ КЛЮЧ УЖЕ ВСТАВЛЕН СЮДА:
+# Ваш проверенный рабочий ключ Google API
 YOUTUBE_API_KEY = "AIzaSyDQAy5AyvG8p6FJq90I7fP42qzfq0QJ8oU"
 
-def search_youtube_official(query):
+def search_youtube_direct(query):
     try:
-        # Официальный поисковый эндпоинт Google
+        # Прямой официальный эндпоинт поиска самого YouTube
         url = "https://googleapis.com"
         params = {
+            "part": "snippet",
             "q": query,
-            "key": YOUTUBE_API_KEY,
-            "cx": "partner-pub-6712035541604593:4969242944" # Безопасный глобальный поисковый индекс видеохостинга
+            "maxResults": 5,
+            "type": "video",
+            "key": YOUTUBE_API_KEY
         }
 
         response = requests.get(url, params=params, timeout=10)
 
         if response.status_code != 200:
-            return {"error": f"Ошибка Google API. Код: {response.status_code}"}
+            return {"error": f"Ошибка YouTube API. Код: {response.status_code}. Проверьте, включен ли YouTube Data API v3 в консоли Google."}
 
         data = response.json()
         items = data.get('items', [])
 
         if not items:
-            return {"error": "По вашему запросу на YouTube ничего не найдено"}
+            return {"error": "По вашему запросу ничего не найдено на YouTube"}
 
         results = []
-        # Выбираем первые 5 результатов
-        for item in items[:5]:
-            link = item.get('link', '')
+        for item in items:
+            video_id = item.get('id', {}).get('videoId')
+            snippet = item.get('snippet', {})
 
-            # Извлекаем ID видео из ссылки
-            video_id = ""
-            if "watch?v=" in link:
-                video_id = link.split("watch?v=")[-1].split("&")[0]
-            elif "youtu.be/" in link:
-                video_id = link.split("youtu.be/")[-1].split("?")[0]
-            else:
-                continue
-
-            pagemap = item.get('pagemap', {})
-            video_object = pagemap.get('videoobject', [{}])[0]
-
-            title = video_object.get('name') or item.get('title', 'Неизвестный трек')
-            artist = video_object.get('author') or 'YouTube Content'
-            thumbnail = video_object.get('thumbnailurl') or f"https://youtube.com{video_id}/mqdefault.jpg"
-
-            results.append({
-                'title': title,
-                'artist': artist,
-                'thumbnail': thumbnail,
-                # Ссылка для безопасного воспроизведения во фрейме
-                'stream_url': f"https://youtube.com{video_id}?autoplay=1"
-            })
-
-        if not results:
-            return {"error": "Не удалось найти подходящие видео-форматы."}
+            if video_id:
+                results.append({
+                    'title': snippet.get('title', 'Неизвестный трек'),
+                    'artist': snippet.get('channelTitle', 'YouTube Content'),
+                    'thumbnail': snippet.get('thumbnails', {}).get('medium', {}).get('url', ''),
+                    'stream_url': f"https://youtube.com{video_id}?autoplay=1"
+                })
 
         return {"tracks": results}
     except Exception as e:
@@ -76,7 +59,7 @@ def search():
     if not query:
         return jsonify({"error": "Пустой запрос"}), 400
 
-    result = search_youtube_official(query)
+    result = search_youtube_direct(query)
     return jsonify(result)
 
 if __name__ == '__main__':
