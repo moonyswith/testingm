@@ -4,70 +4,44 @@ from flask import Flask, send_from_directory, request, jsonify
 
 app = Flask(__name__)
 
-# Путь к текущей папке проекта
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def search_soundcloud_multiple(query):
+def search_youtube_via_invidious(query):
     try:
-        # Официальный открытый клиентский ID SoundCloud для веб-плееров
-        client_id = "v3E6Ad9O4r77A016930O59A4101E694a"
-        url = "https://soundcloud.com"
-
+        # Используем одно из самых стабильных и быстрых зеркал Invidious API
+        url = "https://perennialte.ch"
         params = {
             "q": query,
-            "client_id": client_id,
-            "limit": 5 # Запрашиваем 5 вариантов
+            "type": "video"
         }
 
+        # Отправляем безопасный запрос от лица браузера
         response = requests.get(url, params=params, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
 
         if response.status_code != 200:
-            return {"error": f"База данных перегружена (Код {response.status_code})"}
+            return {"error": f"Зеркало перегружено, код ответа: {response.status_code}"}
 
         data = response.json()
-        collection = data.get('collection', [])
 
-        if not collection:
-            return {"error": "Ничего не найдено"}
+        if not data or len(data) == 0:
+            return {"error": "Ничего не найдено на YouTube по этому запросу"}
 
         results = []
-        for track in collection:
-            # Ищем прямую ссылку на аудиопоток внутри метаданных трека
-            transcodings = track.get('media', {}).get('transcodings', [])
-            stream_url = ""
-
-            # Пытаемся вытащить стандартный прогрессивный mp3-поток
-            for t in transcodings:
-                if t.get('format', {}).get('protocol') == 'progressive':
-                    unauth_url = t.get('url')
-                    # Получаем финальный рабочий URL для плеера
-                    stream_resp = requests.get(f"{unauth_url}?client_id={client_id}", timeout=3)
-                    if stream_resp.status_code == 200:
-                        stream_url = stream_resp.json().get('url', '')
-                    break
-
-            # Если прогрессивный формат не найден, берем первый доступный HLS-поток
-            if not stream_url and transcodings:
-                unauth_url = transcodings[0].get('url')
-                stream_resp = requests.get(f"{unauth_url}?client_id={client_id}", timeout=3)
-                if stream_resp.status_code == 200:
-                    stream_url = stream_resp.json().get('url', '')
-
-            if stream_url:
-                # Настраиваем обложку
-                artwork = track.get('artwork_url') or track.get('user', {}).get('avatar_url') or 'https://placeholder.com'
-                artwork = artwork.replace('-large.', '-t200x200.') # делаем качество лучше
-
+        # Берем топ-5 результатов, как и планировали
+        for video in data[:5]:
+            video_id = video.get('videoId')
+            if video_id:
                 results.append({
-                    'title': track.get('title', 'Неизвестный трек'),
-                    'artist': track.get('user', {}).get('username', 'Неизвестный исполнитель'),
-                    'thumbnail': artwork,
-                    'stream_url': stream_url
+                    'title': video.get('title', 'Неизвестный трек'),
+                    'artist': video.get('author', 'Неизвестный исполнитель'),
+                    'thumbnail': f"https://perennialte.ch{video_id}/mqdefault.jpg",
+                    # Генерируем вечную прямую ссылку на аудиопоток (itag=140 — это чистый звук M4A/AAC)
+                    'stream_url': f"https://perennialte.ch{video_id}&itag=140"
                 })
 
         return {"tracks": results}
     except Exception as e:
-        return {"error": f"Ошибка сети сервера: {str(e)}"}
+        return {"error": f"Ошибка сети бэкенда: {str(e)}"}
 
 @app.route('/')
 def home():
@@ -79,7 +53,7 @@ def search():
     if not query:
         return jsonify({"error": "Пустой запрос"}), 400
 
-    result = search_soundcloud_multiple(query)
+    result = search_youtube_via_invidious(query)
     return jsonify(result)
 
 if __name__ == '__main__':
